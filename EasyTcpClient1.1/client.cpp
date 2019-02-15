@@ -11,11 +11,48 @@
 
 
 
-struct DataPackage
+//Command
+enum CMD
 {
-	int age;
-	char name[32];
+	CMD_LOGIN,
+	CMD_LOGIN_RESULT,
+	CMD_LOGIN_OUT,
+	CMD_LOGIN_OUT_RESULT,
+	CMD_EROOR
 };
+
+//Data struct header
+struct DataHeader
+{
+	int _cmd;
+	int _dataLength;
+};
+
+//Data struct body
+struct Login
+{
+	char _userName[32];
+	char _userPassWord[32];
+};
+
+//Return Command result
+struct LoginResult
+{
+	int result;
+};
+
+//Data struct body
+struct LoginOut
+{
+	char _userName[32];
+};
+
+//Return Command result
+struct LoginOutResult
+{
+	int result;
+};
+
 
 int main()
 {
@@ -51,44 +88,92 @@ int main()
 	}
 
 	// 3 Receive/Send Server Data
-	char* _receBuf = (char*)malloc(sizeof(char) * 512);
-	char* _sendBuf= (char*)malloc(sizeof(char) * 512);
-	memset(_receBuf, 0, _msize(_receBuf));
-	memset(_sendBuf, 0, _msize(_sendBuf));
+	DataHeader* _header = (DataHeader*)malloc(sizeof(DataHeader));
+	memset(_header, 0, sizeof(DataHeader));
 
-	DataPackage* _pack = (DataPackage*)malloc(sizeof(DataPackage));
-	memset(_pack, 0, _msize(_pack));
+	Login* _login = (Login*)malloc(sizeof(Login));
+	memset(_login, 0, sizeof(Login));
+
+	LoginOut* _loginOut = (LoginOut*)malloc(sizeof(LoginOut));
+	memset(_loginOut, 0, sizeof(LoginOut));
+
+	char* _write = (char*)malloc(sizeof(char) * 32);
+	memset(_write, 0, _msize(_write));
+
+	LoginResult* _loginRe = (LoginResult*)malloc(sizeof(LoginResult));
+	memset(_loginRe, 0, sizeof(LoginResult));
+
+	LoginOutResult* _loginOutRe = (LoginOutResult*)malloc(sizeof(LoginOutResult));
+	memset(_loginOutRe, 0, sizeof(LoginOutResult));
 	while (true)
 	{
 
-		scanf("%s", _sendBuf);
-		if (0 == strcmp(_sendBuf, "exit.."))
+		scanf("%s", _write);
+
+		if (0 == strcmp(_write, "exit.."))
 		{
 			printf("exit client\n");
 			break;
 		}
+		else if(0 == strcmp(_write, "login"))
+		{
+			_header->_cmd = CMD_LOGIN;
+			_header->_dataLength = sizeof(Login);
+			memcpy(_login->_userName, "admin", strlen("admin"));
+			memcpy(_login->_userPassWord, "admin123", strlen("admin123"));
+
+			send(_sock, (const char*)_header, sizeof(DataHeader), 0);
+			send(_sock, (const char*)_login, sizeof(Login), 0);
+		}
+		else if (0 == strcmp(_write, "loginOut"))
+		{
+			_header->_cmd = CMD_LOGIN_OUT;
+			_header->_dataLength = sizeof(LoginOut);
+			memcpy(_loginOut->_userName, "admin", strlen("admin"));
+
+
+			send(_sock, (const char*)_header, sizeof(DataHeader), 0);
+			send(_sock, (const char*)_loginOut, sizeof(LoginOut), 0);
+		}
 		else
 		{
-			*(_sendBuf + strlen(_sendBuf)) = '\0';
-			send(_sock, _sendBuf, strlen(_sendBuf) + 1, 0);
+			printf("Unable to parse command\n");
+			continue;
 		}
 
-		int ret = recv(_sock, (char*)_pack, _msize(_pack), 0);
+		int ret = recv(_sock, (char*)_header, sizeof(DataHeader), 0);
 		if (ret > 0)
-		{	
-			printf("rece: age: %d  name: %s\n", _pack->age, _pack->name);
+		{
+			switch (_header->_cmd)
+			{
+				case CMD_LOGIN_RESULT:
+				{
+					ret = recv(_sock, (char*)_loginRe, sizeof(LoginResult), 0);
+					if (ret > 0)
+					{
+						printf("rece: return %d\n", _loginRe->result);
+					}
+				}
+				break;
+				case CMD_LOGIN_OUT_RESULT:
+				{
+					ret = recv(_sock, (char*)_loginOutRe, sizeof(LoginOutResult), 0);
+					if (ret > 0)
+					{
+						printf("rece: return %d\n", _loginOutRe->result);
+					}
+				}
+				break;
+			default:
+				printf("receive: Unable to parse command!\n");
+				break;
+			}
 		}
-
-		memset(_receBuf, NULL, _msize(_receBuf));
-		memset(_sendBuf, NULL, _msize(_sendBuf));
-		memset(_pack, 0, _msize(_pack));
 	}
 
 	// 4 Close Socket
 	closesocket(_sock);
-	free(_receBuf);
-	free(_sendBuf);
-	free(_pack);
+
 
 	//Clean Windows socket Envoronment
 	WSACleanup();

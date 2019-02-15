@@ -8,12 +8,49 @@
 #include <stdio.h>
 #include <memory>
 
-
-struct DataPackage
+//Command
+enum CMD
 {
-	int age;
-	char name[32];
+	CMD_LOGIN,
+	CMD_LOGIN_RESULT,
+	CMD_LOGIN_OUT,
+	CMD_LOGIN_OUT_RESULT,
+	CMD_EROOR
 };
+
+//Data struct header
+struct DataHeader
+{
+	int _cmd;
+	int _dataLength;
+};
+
+//Data struct body
+struct Login
+{
+	char _userName[32];
+	char _userPassWord[32];
+};
+
+//Return Command result
+struct LoginResult
+{
+	int result;
+};
+
+//Data struct body
+struct LoginOut
+{
+	char _userName[32];
+};
+
+//Return Command result
+struct LoginOutResult
+{
+	int result;
+};
+
+
 int main()
 {
 #ifdef _WIN32
@@ -71,44 +108,90 @@ int main()
 	}
 
 	// 5 Send/Receive Data for Client
-	char* _sendBuf = (char*)malloc(sizeof(char)*512);
-	char* _receBuf = (char*)malloc(sizeof(char) * 512);
-	memset(_receBuf, 0, _msize(_receBuf));
-	memset(_sendBuf, 0, _msize(_sendBuf));
+	DataHeader* _header = (DataHeader*)malloc(sizeof(DataHeader));
+	memset(_header, 0, sizeof(DataHeader));
 
-	DataPackage* _pack = (DataPackage*)malloc(sizeof(DataPackage));
-	memset(_pack, 0, _msize(_pack));
+	Login* _login = (Login*)malloc(sizeof(Login));
+	memset(_login, 0, sizeof(Login));
+
+	LoginOut* _loginOut = (LoginOut*)malloc(sizeof(LoginOut));
+	memset(_loginOut, 0, sizeof(LoginOut));
+
+	LoginResult* _loginRe = (LoginResult*)malloc(sizeof(LoginResult));
+	memset(_loginRe, 0, sizeof(LoginResult));
+
+	LoginOutResult* _loginOutRe = (LoginOutResult*)malloc(sizeof(LoginOutResult));
+	memset(_loginOutRe, 0, sizeof(LoginOutResult));
+
+
 	while (true)
 	{
-		int ret = recv(_cSock, _receBuf, _msize(_receBuf), 0);
+		int ret = recv(_cSock, (char*)_header, sizeof(DataHeader), 0);
 		if (ret <= 0)
 		{
 			printf("Client close...\n");
 			break;
 		}
-		if (0 == strcmp(_receBuf, "getInfo"))
+		printf("recv: CMD: %d, DataLength: %d\n", _header->_cmd, _header->_dataLength);
+		
+		switch (_header->_cmd)
 		{
-			_pack->age = 80;
-			memcpy(_pack->name, "XiaoQiang", strlen("XiaoQiang"));
-			send(_cSock, (const char*)_pack, _msize(_pack), 0);
-		}
-		else
-		{
-			char _msgBuf[] = "????-????-????-????.";
-			send(_cSock, _msgBuf, strlen(_msgBuf), 0);
-		}
+			case CMD_LOGIN:
+			{
+				recv(_cSock, (char*)_login, sizeof(Login), 0);
 
-		memset(_sendBuf, 0, _msize(_sendBuf));
-		memset(_receBuf, 0, _msize(_receBuf));
-		memset(_pack, 0, _msize(_pack));
+				printf("UserName: %s, UserPassWord; %s\n", _login->_userName, _login->_userPassWord);
+
+				//receive Login struct, you can check data is right
+				//if Login struct data is right, we can send result=0 for client
+				_header->_cmd = CMD_LOGIN_RESULT;
+				_header->_dataLength = sizeof(LoginResult);
+				_loginRe->result = 0;
+
+				send(_cSock, (const char*)_header, sizeof(DataHeader), 0);
+				send(_cSock, (const char*)_loginRe, sizeof(LoginResult), 0);
+
+				memset(_header, 0, sizeof(DataHeader));
+				memset(_loginRe, 0, sizeof(LoginResult));
+			}
+			break;
+			case CMD_LOGIN_OUT:
+			{
+				recv(_cSock, (char*)_loginOut, sizeof(Login), 0);
+				//receive Login struct, you can check data is right
+				printf("UserName: %s, \n", "admin");
+
+				_header->_cmd = CMD_LOGIN_OUT_RESULT;
+				_header->_dataLength = sizeof(LoginOutResult);
+				_loginOutRe->result = 0;
+
+				send(_cSock, (const char*)_header, sizeof(DataHeader), 0);
+				send(_cSock, (const char*)_loginOutRe, sizeof(LoginOutResult), 0);
+
+				memset(_header, 0, sizeof(DataHeader));
+				memset(_loginOutRe, 0, sizeof(LoginOutResult));
+			}
+			break;
+		default:
+			_header->_cmd = CMD_EROOR;
+			_header->_dataLength = 0;
+
+			send(_cSock, (char*)_header, sizeof(DataHeader), 0);
+
+			memset(_header, 0, sizeof(DataHeader));
+			break;
+		}
 	}
 
 
 	// 6 Close Socket
 	closesocket(_sock);
-	free(_sendBuf);
-	free(_receBuf);
-	free(_pack);
+	free(_header);
+	free(_login);
+	free(_loginOut);
+	free(_loginRe);
+	free(_loginOutRe);
+
 
 	//Clean Windows socket Envoronment
 	WSACleanup();
