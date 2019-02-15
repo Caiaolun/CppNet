@@ -8,6 +8,15 @@
 #include <stdio.h>
 #include <memory>
 #include <stdlib.h>
+
+
+
+struct DataPackage
+{
+	int age;
+	char name[32];
+};
+
 int main()
 {
 #ifdef _WIN32
@@ -46,7 +55,9 @@ int main()
 	char* _sendBuf= (char*)malloc(sizeof(char) * 512);
 	memset(_receBuf, 0, _msize(_receBuf));
 	memset(_sendBuf, 0, _msize(_sendBuf));
-	//char _sendtemp[512] = {};
+
+	DataPackage* _pack = (DataPackage*)malloc(sizeof(DataPackage));
+	memset(_pack, 0, _msize(_pack));
 	while (true)
 	{
 
@@ -62,42 +73,22 @@ int main()
 			send(_sock, _sendBuf, strlen(_sendBuf) + 1, 0);
 		}
 
-		int ret = recv(_sock, _receBuf, _msize(_receBuf), 0);
+		int ret = recv(_sock, (char*)_pack, _msize(_pack), 0);
 		if (ret > 0)
 		{	
-			*(_receBuf + ret) = '\0';
-			printf("rece: %s\n", _receBuf);
+			printf("rece: age: %d  name: %s\n", _pack->age, _pack->name);
 		}
 
 		memset(_receBuf, NULL, _msize(_receBuf));
 		memset(_sendBuf, NULL, _msize(_sendBuf));
-
+		memset(_pack, 0, _msize(_pack));
 	}
-	/*
-	while (true)
-	{
-		int ret = recv(_sock, _receBuf, sizeof(_receBuf), 0);
-		if (ret > 0)
-		{
-			printf("rece: %s\n", _receBuf);
-		}
 
-		
-		scanf(_sendBuf);
-		ret = send(_sock, _sendBuf, strlen(_sendBuf), 0);
-		if (ret > 0)
-		{
-			printf("send: s%s\n", _sendBuf);
-		}
-		
-		memset(_receBuf, 0, sizeof(_receBuf));
-		memset(_sendBuf, 0, sizeof(_sendBuf));
-	}
-	*/
 	// 4 Close Socket
 	closesocket(_sock);
 	free(_receBuf);
 	free(_sendBuf);
+	free(_pack);
 
 	//Clean Windows socket Envoronment
 	WSACleanup();

@@ -8,6 +8,12 @@
 #include <stdio.h>
 #include <memory>
 
+
+struct DataPackage
+{
+	int age;
+	char name[32];
+};
 int main()
 {
 #ifdef _WIN32
@@ -61,7 +67,7 @@ int main()
 	else
 	{
 		printf("==SUCCESS==: accept Clinet!\n");
-		printf("==Clinet==: IP = %s\n", inet_ntoa(_client.sin_addr));
+		printf("==Clinet==: Socket: %d  IP : %s\n", (int)_cSock, inet_ntoa(_client.sin_addr));
 	}
 
 	// 5 Send/Receive Data for Client
@@ -69,30 +75,22 @@ int main()
 	char* _receBuf = (char*)malloc(sizeof(char) * 512);
 	memset(_receBuf, 0, _msize(_receBuf));
 	memset(_sendBuf, 0, _msize(_sendBuf));
-	//char _rectemo[512] = {};
+
+	DataPackage* _pack = (DataPackage*)malloc(sizeof(DataPackage));
+	memset(_pack, 0, _msize(_pack));
 	while (true)
 	{
-		//int ret = recv(_cSock, _rectemo, sizeof(_rectemo), 0);
-
-		//Error : sizeof(_receBuf), sizeof(_receBuf) = 4
-		//int ret = recv(_cSock, _receBuf, sizeof(_receBuf), 0);
-
-		//Warning: Don't use sizeof in pointer, you can use _msize
 		int ret = recv(_cSock, _receBuf, _msize(_receBuf), 0);
 		if (ret <= 0)
 		{
 			printf("Client close...\n");
 			break;
 		}
-		if (0 == strcmp(_receBuf, "getName"))
+		if (0 == strcmp(_receBuf, "getInfo"))
 		{
-			char _msgBuf[] = "XiaoMing.";
-			send(_cSock, _msgBuf, strlen(_msgBuf) + 1, 0);
-		}
-		else if (0 == strcmp(_receBuf, "getAge"))
-		{
-			char _msgBuf[] = "80.";
-			send(_cSock, _msgBuf, strlen(_msgBuf), 0);
+			_pack->age = 80;
+			memcpy(_pack->name, "XiaoQiang", strlen("XiaoQiang"));
+			send(_cSock, (const char*)_pack, _msize(_pack), 0);
 		}
 		else
 		{
@@ -102,6 +100,7 @@ int main()
 
 		memset(_sendBuf, 0, _msize(_sendBuf));
 		memset(_receBuf, 0, _msize(_receBuf));
+		memset(_pack, 0, _msize(_pack));
 	}
 
 
@@ -109,6 +108,7 @@ int main()
 	closesocket(_sock);
 	free(_sendBuf);
 	free(_receBuf);
+	free(_pack);
 
 	//Clean Windows socket Envoronment
 	WSACleanup();
