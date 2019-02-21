@@ -26,28 +26,52 @@ struct DataHeader
 };
 
 //Data struct body
-struct Login
+struct Login : public DataHeader
 {
+	Login()
+	{
+		_dataLength = sizeof(Login);
+		_cmd = CMD_LOGIN;
+	}
 	char _userName[32];
 	char _userPassWord[32];
 };
 
 //Return Command result
-struct LoginResult
+struct LoginResult : public DataHeader
 {
-	int result;
+	LoginResult()
+	{
+		_dataLength = sizeof(LoginResult);
+		_cmd = CMD_LOGIN_RESULT;
+		//if Login struct data is right, we can send result=0 for client
+		_result = 0;
+	}
+	int _result;
 };
 
 //Data struct body
-struct LoginOut
+struct LoginOut : public DataHeader
 {
+	LoginOut()
+	{
+		_dataLength = sizeof(LoginOut);
+		_cmd = CMD_LOGIN_OUT;
+	}
 	char _userName[32];
 };
 
 //Return Command result
-struct LoginOutResult
+struct LoginOutResult : public DataHeader
 {
-	int result;
+	LoginOutResult()
+	{
+		_dataLength = sizeof(LoginOutResult);
+		_cmd = CMD_LOGIN_OUT_RESULT;
+		//if Login struct data is right, we can send result=0 for client
+		_result = 0;
+	}
+	int _result;
 };
 
 
@@ -111,17 +135,13 @@ int main()
 	DataHeader* _header = (DataHeader*)malloc(sizeof(DataHeader));
 	memset(_header, 0, sizeof(DataHeader));
 
-	Login* _login = (Login*)malloc(sizeof(Login));
-	memset(_login, 0, sizeof(Login));
+	Login* _login = new Login;
 
-	LoginOut* _loginOut = (LoginOut*)malloc(sizeof(LoginOut));
-	memset(_loginOut, 0, sizeof(LoginOut));
+	LoginOut* _loginOut = new LoginOut;
 
-	LoginResult* _loginRe = (LoginResult*)malloc(sizeof(LoginResult));
-	memset(_loginRe, 0, sizeof(LoginResult));
+	LoginResult* _loginRe = new LoginResult;
 
-	LoginOutResult* _loginOutRe = (LoginOutResult*)malloc(sizeof(LoginOutResult));
-	memset(_loginOutRe, 0, sizeof(LoginOutResult));
+	LoginOutResult* _loginOutRe = new LoginOutResult;
 
 
 	while (true)
@@ -132,47 +152,36 @@ int main()
 			printf("Client close...\n");
 			break;
 		}
-		printf("recv: CMD: %d, DataLength: %d\n", _header->_cmd, _header->_dataLength);
 		
 		switch (_header->_cmd)
 		{
 			case CMD_LOGIN:
 			{
-				recv(_cSock, (char*)_login, sizeof(Login), 0);
-
+				recv(_cSock, (char*)_login + sizeof(DataHeader), sizeof(Login) - sizeof(DataHeader), 0);
+				printf("recv: CMD_LOGIN, DataLength: %d\n", _header->_dataLength);
 				printf("UserName: %s, UserPassWord; %s\n", _login->_userName, _login->_userPassWord);
 
 				//receive Login struct, you can check data is right
-				//if Login struct data is right, we can send result=0 for client
-				_header->_cmd = CMD_LOGIN_RESULT;
-				_header->_dataLength = sizeof(LoginResult);
-				_loginRe->result = 0;
 
-				send(_cSock, (const char*)_header, sizeof(DataHeader), 0);
 				send(_cSock, (const char*)_loginRe, sizeof(LoginResult), 0);
 
 				memset(_header, 0, sizeof(DataHeader));
-				memset(_loginRe, 0, sizeof(LoginResult));
 			}
 			break;
 			case CMD_LOGIN_OUT:
 			{
-				recv(_cSock, (char*)_loginOut, sizeof(Login), 0);
+				recv(_cSock, (char*)_loginOut + sizeof(DataHeader), sizeof(LoginOut) - sizeof(DataHeader), 0);
 				//receive Login struct, you can check data is right
+				printf("recv: CMD_LOGIN_OUT, DataLength: %d\n", _header->_dataLength);
 				printf("UserName: %s, \n", "admin");
 
-				_header->_cmd = CMD_LOGIN_OUT_RESULT;
-				_header->_dataLength = sizeof(LoginOutResult);
-				_loginOutRe->result = 0;
-
-				send(_cSock, (const char*)_header, sizeof(DataHeader), 0);
 				send(_cSock, (const char*)_loginOutRe, sizeof(LoginOutResult), 0);
 
 				memset(_header, 0, sizeof(DataHeader));
-				memset(_loginOutRe, 0, sizeof(LoginOutResult));
 			}
 			break;
 		default:
+			printf("recv: Unable analysis CMD\n");
 			_header->_cmd = CMD_EROOR;
 			_header->_dataLength = 0;
 

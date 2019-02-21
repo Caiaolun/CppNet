@@ -29,28 +29,50 @@ struct DataHeader
 };
 
 //Data struct body
-struct Login
+struct Login : public DataHeader
 {
+	Login()
+	{
+		_dataLength = sizeof(Login);
+		_cmd = CMD_LOGIN;
+	}
 	char _userName[32];
 	char _userPassWord[32];
 };
 
 //Return Command result
-struct LoginResult
+struct LoginResult : public DataHeader
 {
-	int result;
+	LoginResult()
+	{
+		_dataLength = sizeof(LoginResult);
+		_cmd = CMD_LOGIN_RESULT;
+		_result = 0;
+	}
+	int _result;
 };
 
 //Data struct body
-struct LoginOut
+struct LoginOut : public DataHeader
 {
+	LoginOut()
+	{
+		_dataLength = sizeof(LoginOut);
+		_cmd = CMD_LOGIN_OUT;
+	}
 	char _userName[32];
 };
 
 //Return Command result
-struct LoginOutResult
+struct LoginOutResult : public DataHeader
 {
-	int result;
+	LoginOutResult()
+	{
+		_dataLength = sizeof(LoginOutResult);
+		_cmd = CMD_LOGIN_OUT_RESULT;
+		_result = 0;
+	}
+	int _result;
 };
 
 
@@ -117,22 +139,16 @@ int main()
 		}
 		else if(0 == strcmp(_write, "login"))
 		{
-			_header->_cmd = CMD_LOGIN;
-			_header->_dataLength = sizeof(Login);
 			memcpy(_login->_userName, "admin", strlen("admin"));
 			memcpy(_login->_userPassWord, "admin123", strlen("admin123"));
 
-			send(_sock, (const char*)_header, sizeof(DataHeader), 0);
+
 			send(_sock, (const char*)_login, sizeof(Login), 0);
 		}
 		else if (0 == strcmp(_write, "loginOut"))
 		{
-			_header->_cmd = CMD_LOGIN_OUT;
-			_header->_dataLength = sizeof(LoginOut);
 			memcpy(_loginOut->_userName, "admin", strlen("admin"));
 
-
-			send(_sock, (const char*)_header, sizeof(DataHeader), 0);
 			send(_sock, (const char*)_loginOut, sizeof(LoginOut), 0);
 		}
 		else
@@ -148,19 +164,19 @@ int main()
 			{
 				case CMD_LOGIN_RESULT:
 				{
-					ret = recv(_sock, (char*)_loginRe, sizeof(LoginResult), 0);
+					ret = recv(_sock, (char*)_loginRe + sizeof(DataHeader), sizeof(LoginResult) - sizeof(DataHeader), 0);
 					if (ret > 0)
 					{
-						printf("rece: return %d\n", _loginRe->result);
+						printf("rece: return %d\n", _loginRe->_result);
 					}
 				}
 				break;
 				case CMD_LOGIN_OUT_RESULT:
 				{
-					ret = recv(_sock, (char*)_loginOutRe, sizeof(LoginOutResult), 0);
+					ret = recv(_sock, (char*)_loginOutRe + sizeof(DataHeader), sizeof(LoginOutResult) - sizeof(DataHeader), 0);
 					if (ret > 0)
 					{
-						printf("rece: return %d\n", _loginOutRe->result);
+						printf("rece: return %d\n", _loginOutRe->_result);
 					}
 				}
 				break;
