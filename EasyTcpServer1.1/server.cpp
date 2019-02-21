@@ -23,6 +23,7 @@ struct DataHeader
 {
 	int _cmd;
 	int _dataLength;
+	int _maxDataLength;
 };
 
 //Data struct body
@@ -33,8 +34,8 @@ struct Login : public DataHeader
 		_dataLength = sizeof(Login);
 		_cmd = CMD_LOGIN;
 	}
-	char _userName[32];
-	char _userPassWord[32];
+	char _userName[32] = {};
+	char _userPassWord[32] = {};
 };
 
 //Return Command result
@@ -132,37 +133,43 @@ int main()
 	}
 
 	// 5 Send/Receive Data for Client
-	DataHeader* _header = (DataHeader*)malloc(sizeof(DataHeader));
-	memset(_header, 0, sizeof(DataHeader));
-
-	Login* _login = new Login;
-
-	LoginOut* _loginOut = new LoginOut;
-
 	LoginResult* _loginRe = new LoginResult;
 
 	LoginOutResult* _loginOutRe = new LoginOutResult;
 
-
+	/**/
+	char* _dataRecv = (char*)malloc(sizeof(char) * 4096);
+	memset(_dataRecv, 0, _msize(_dataRecv));
+	
 	while (true)
 	{
-		int ret = recv(_cSock, (char*)_header, sizeof(DataHeader), 0);
+		//char _dataRecv[4096];
+		int ret = recv(_cSock, (char*)_dataRecv, sizeof(DataHeader), 0);
+		DataHeader* _header = (DataHeader*)_dataRecv;
+
 		if (ret <= 0)
 		{
 			printf("Client close...\n");
 			break;
 		}
 		
+		/*		
+		//Determine whether the data is larger than the data header
+		if (ret >= sizeof(DataHeader))
+		{
+			//Stick package problem
+		}
+		*/
 		switch (_header->_cmd)
 		{
 			case CMD_LOGIN:
 			{
-				recv(_cSock, (char*)_login + sizeof(DataHeader), sizeof(Login) - sizeof(DataHeader), 0);
-				printf("recv: CMD_LOGIN, DataLength: %d\n", _header->_dataLength);
+				recv(_cSock, (char*)_dataRecv + sizeof(DataHeader), _header->_dataLength - sizeof(DataHeader), 0);
+				Login* _login = (Login*)_dataRecv;
+				printf("recv: CMD_LOGIN, DataLength: %d\n", _login->_dataLength);
 				printf("UserName: %s, UserPassWord; %s\n", _login->_userName, _login->_userPassWord);
 
 				//receive Login struct, you can check data is right
-
 				send(_cSock, (const char*)_loginRe, sizeof(LoginResult), 0);
 
 				memset(_header, 0, sizeof(DataHeader));
@@ -170,9 +177,10 @@ int main()
 			break;
 			case CMD_LOGIN_OUT:
 			{
-				recv(_cSock, (char*)_loginOut + sizeof(DataHeader), sizeof(LoginOut) - sizeof(DataHeader), 0);
+				recv(_cSock, (char*)_dataRecv + sizeof(DataHeader), sizeof(LoginOut) - sizeof(DataHeader), 0);
+				LoginOut* _loginOut = (LoginOut*)_dataRecv;
 				//receive Login struct, you can check data is right
-				printf("recv: CMD_LOGIN_OUT, DataLength: %d\n", _header->_dataLength);
+				printf("recv: CMD_LOGIN_OUT, DataLength: %d\n", _loginOut->_dataLength);
 				printf("UserName: %s, \n", "admin");
 
 				send(_cSock, (const char*)_loginOutRe, sizeof(LoginOutResult), 0);
@@ -190,17 +198,15 @@ int main()
 			memset(_header, 0, sizeof(DataHeader));
 			break;
 		}
+		memset(_dataRecv, 0, _msize(_dataRecv));
 	}
 
 
 	// 6 Close Socket
 	closesocket(_sock);
-	free(_header);
-	free(_login);
-	free(_loginOut);
 	free(_loginRe);
 	free(_loginOutRe);
-
+	free(_dataRecv);
 
 	//Clean Windows socket Envoronment
 	WSACleanup();

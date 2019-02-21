@@ -26,6 +26,7 @@ struct DataHeader
 {
 	int _cmd;
 	int _dataLength;
+	int _maxDataLength;
 };
 
 //Data struct body
@@ -36,8 +37,8 @@ struct Login : public DataHeader
 		_dataLength = sizeof(Login);
 		_cmd = CMD_LOGIN;
 	}
-	char _userName[32];
-	char _userPassWord[32];
+	char _userName[32] = {};
+	char _userPassWord[32] = {};
 };
 
 //Return Command result
@@ -59,8 +60,9 @@ struct LoginOut : public DataHeader
 	{
 		_dataLength = sizeof(LoginOut);
 		_cmd = CMD_LOGIN_OUT;
+		_userName = new char[32];
 	}
-	char _userName[32];
+	char* _userName;
 };
 
 //Return Command result
@@ -113,20 +115,16 @@ int main()
 	DataHeader* _header = (DataHeader*)malloc(sizeof(DataHeader));
 	memset(_header, 0, sizeof(DataHeader));
 
-	Login* _login = (Login*)malloc(sizeof(Login));
-	memset(_login, 0, sizeof(Login));
+	Login* _login = new Login();
 
-	LoginOut* _loginOut = (LoginOut*)malloc(sizeof(LoginOut));
-	memset(_loginOut, 0, sizeof(LoginOut));
+	LoginOut* _loginOut = new LoginOut();
 
 	char* _write = (char*)malloc(sizeof(char) * 32);
 	memset(_write, 0, _msize(_write));
 
-	LoginResult* _loginRe = (LoginResult*)malloc(sizeof(LoginResult));
-	memset(_loginRe, 0, sizeof(LoginResult));
+	LoginResult* _loginRe = new LoginResult();
 
-	LoginOutResult* _loginOutRe = (LoginOutResult*)malloc(sizeof(LoginOutResult));
-	memset(_loginOutRe, 0, sizeof(LoginOutResult));
+	LoginOutResult* _loginOutRe = new LoginOutResult();
 	while (true)
 	{
 
@@ -139,15 +137,15 @@ int main()
 		}
 		else if(0 == strcmp(_write, "login"))
 		{
-			memcpy(_login->_userName, "admin", strlen("admin"));
-			memcpy(_login->_userPassWord, "admin123", strlen("admin123"));
+			strcpy(_login->_userName, "admin");
+			strcpy(_login->_userPassWord, "admin123");
 
 
 			send(_sock, (const char*)_login, sizeof(Login), 0);
 		}
 		else if (0 == strcmp(_write, "loginOut"))
 		{
-			memcpy(_loginOut->_userName, "admin", strlen("admin"));
+			strcpy(_loginOut->_userName, "admin");
 
 			send(_sock, (const char*)_loginOut, sizeof(LoginOut), 0);
 		}
