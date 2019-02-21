@@ -112,9 +112,6 @@ int main()
 	}
 
 	// 3 Receive/Send Server Data
-	DataHeader* _header = (DataHeader*)malloc(sizeof(DataHeader));
-	memset(_header, 0, sizeof(DataHeader));
-
 	Login* _login = new Login();
 
 	LoginOut* _loginOut = new LoginOut();
@@ -122,9 +119,9 @@ int main()
 	char* _write = (char*)malloc(sizeof(char) * 32);
 	memset(_write, 0, _msize(_write));
 
-	LoginResult* _loginRe = new LoginResult();
+	char* _dataRecv = (char*)malloc(sizeof(char) * 4096);
+	memset(_dataRecv, 0, _msize(_dataRecv));
 
-	LoginOutResult* _loginOutRe = new LoginOutResult();
 	while (true)
 	{
 
@@ -155,14 +152,16 @@ int main()
 			continue;
 		}
 
-		int ret = recv(_sock, (char*)_header, sizeof(DataHeader), 0);
+		int ret = recv(_sock, (char*)_dataRecv, sizeof(DataHeader), 0);
+		DataHeader* _header = (DataHeader*)_dataRecv;
 		if (ret > 0)
 		{
 			switch (_header->_cmd)
 			{
 				case CMD_LOGIN_RESULT:
 				{
-					ret = recv(_sock, (char*)_loginRe + sizeof(DataHeader), sizeof(LoginResult) - sizeof(DataHeader), 0);
+					ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), _header->_dataLength - sizeof(DataHeader), 0);
+					LoginResult* _loginRe = (LoginResult*)_dataRecv + sizeof(DataHeader);
 					if (ret > 0)
 					{
 						printf("rece: return %d\n", _loginRe->_result);
@@ -171,7 +170,8 @@ int main()
 				break;
 				case CMD_LOGIN_OUT_RESULT:
 				{
-					ret = recv(_sock, (char*)_loginOutRe + sizeof(DataHeader), sizeof(LoginOutResult) - sizeof(DataHeader), 0);
+					ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(LoginOutResult) - sizeof(DataHeader), 0);
+					LoginOutResult* _loginOutRe = (LoginOutResult*)_dataRecv + sizeof(DataHeader);
 					if (ret > 0)
 					{
 						printf("rece: return %d\n", _loginOutRe->_result);

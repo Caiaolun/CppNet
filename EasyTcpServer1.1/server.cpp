@@ -137,15 +137,16 @@ int main()
 
 	LoginOutResult* _loginOutRe = new LoginOutResult;
 
-	/**/
 	char* _dataRecv = (char*)malloc(sizeof(char) * 4096);
 	memset(_dataRecv, 0, _msize(_dataRecv));
 	
 	while (true)
 	{
-		//char _dataRecv[4096];
+
 		int ret = recv(_cSock, (char*)_dataRecv, sizeof(DataHeader), 0);
 		DataHeader* _header = (DataHeader*)_dataRecv;
+
+		printf("recv: DataHeader, DataLength: %d\n", _header->_dataLength);
 
 		if (ret <= 0)
 		{
@@ -181,7 +182,7 @@ int main()
 				LoginOut* _loginOut = (LoginOut*)_dataRecv;
 				//receive Login struct, you can check data is right
 				printf("recv: CMD_LOGIN_OUT, DataLength: %d\n", _loginOut->_dataLength);
-				printf("UserName: %s, \n", "admin");
+				printf("UserName: %s \n", "admin");
 
 				send(_cSock, (const char*)_loginOutRe, sizeof(LoginOutResult), 0);
 
