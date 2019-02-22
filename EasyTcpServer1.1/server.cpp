@@ -17,6 +17,7 @@ enum CMD
 	CMD_LOGIN_RESULT,
 	CMD_LOGIN_OUT,
 	CMD_LOGIN_OUT_RESULT,
+	CMD_NEW_USER_JOIN,
 	CMD_ERROR
 };
 
@@ -76,12 +77,25 @@ struct LoginOutResult : public DataHeader
 	}
 	int _result;
 };
+struct NewUserJoin : public DataHeader
+{
+	NewUserJoin()
+	{
+		_dataLength = sizeof(NewUserJoin);
+		_cmd = CMD_NEW_USER_JOIN;
+		//if Login struct data is right, we can send result=0 for client
+		_socke = 0;
+	}
+	int _socke;
+};
 
 std::vector<SOCKET> g_clients;
 
-LoginResult* _loginRe = new LoginResult;
+NewUserJoin* _newUserJoin = new NewUserJoin();
 
-LoginOutResult* _loginOutRe = new LoginOutResult;
+LoginResult* _loginRe = new LoginResult();
+
+LoginOutResult* _loginOutRe = new LoginOutResult();
 
 char* _dataRecv = (char*)malloc(sizeof(char) * 4096);
 
@@ -263,6 +277,13 @@ int main()
 
 			printf("==SUCCESS==: accept Clinet!\n");
 			printf("==Clinet==: Socket: %d  IP : %s\n", (int)_cSock, inet_ntoa(_client.sin_addr));
+
+			for (int n = 0; n < (int)g_clients.size(); n++)
+			{
+				NewUserJoin _userjoin;
+				_userjoin._socke = _cSock;
+				send(g_clients[n], (const char*)&_userjoin, sizeof(NewUserJoin), 0);
+			}
 
 			g_clients.push_back(_cSock);
 

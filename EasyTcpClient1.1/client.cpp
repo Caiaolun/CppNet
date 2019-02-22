@@ -17,6 +17,7 @@ enum CMD
 	CMD_LOGIN_RESULT,
 	CMD_LOGIN_OUT,
 	CMD_LOGIN_OUT_RESULT,
+	CMD_NEW_USER_JOIN,
 	CMD_ERROR
 };
 
@@ -76,7 +77,79 @@ struct LoginOutResult : public DataHeader
 	}
 	int _result;
 };
+struct NewUserJoin : public DataHeader
+{
+	NewUserJoin()
+	{
+		_dataLength = sizeof(NewUserJoin);
+		_cmd = CMD_NEW_USER_JOIN;
+		//if Login struct data is right, we can send result=0 for client
+		_socke = 0;
+	}
+	int _socke;
+};
 
+Login* _login = new Login();
+
+LoginOut* _loginOut = new LoginOut();
+
+char* _dataRecv = (char*)malloc(sizeof(char) * 4096);
+
+int processor(SOCKET _sock)
+{
+	int nLen = recv(_sock, (char*)_dataRecv, sizeof(DataHeader), 0);
+	DataHeader* _header = (DataHeader*)_dataRecv;
+
+	printf("recv: DataHeader, DataLength: %d\n", _header->_dataLength);
+
+	if (nLen <= 0)
+	{
+		printf("Client close...\n");
+		return -1;
+	}
+
+	switch (_header->_cmd)
+	{
+		int ret = 0;
+		switch (_header->_cmd)
+		{
+		case CMD_LOGIN_RESULT:
+		{
+			ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), _header->_dataLength - sizeof(DataHeader), 0);
+			LoginResult* _loginRe = (LoginResult*)_dataRecv + sizeof(DataHeader);
+			if (ret > 0)
+			{
+				printf("rece: return %d\n", _loginRe->_result);
+			}
+		}
+		break;
+		case CMD_LOGIN_OUT_RESULT:
+		{
+			ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(LoginOutResult) - sizeof(DataHeader), 0);
+			LoginOutResult* _loginOutRe = (LoginOutResult*)_dataRecv + sizeof(DataHeader);
+			if (ret > 0)
+			{
+				printf("rece: return %d\n", _loginOutRe->_result);
+			}
+		}
+		break;
+		case CMD_NEW_USER_JOIN:
+		{
+			ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(NewUserJoin) - sizeof(DataHeader), 0);
+			NewUserJoin* _Uers = (NewUserJoin*)_dataRecv + sizeof(DataHeader);
+			if (ret > 0)
+			{
+				printf("rece: New client: %d com here...\n", _Uers->_socke);
+			}
+		}
+		break;
+		default:
+			printf("receive: Unable to parse command!\n");
+			break;
+		}
+	}
+	memset(_dataRecv, 0, _msize(_dataRecv));
+}
 
 
 int main()
@@ -113,77 +186,42 @@ int main()
 	}
 
 	// 3 Receive/Send Server Data
-	Login* _login = new Login();
 
-	LoginOut* _loginOut = new LoginOut();
-
-	char* _write = (char*)malloc(sizeof(char) * 32);
-	memset(_write, 0, _msize(_write));
-
-	char* _dataRecv = (char*)malloc(sizeof(char) * 4096);
-	memset(_dataRecv, 0, _msize(_dataRecv));
 
 	while (true)
 	{
 
-		scanf("%s", _write);
 
-		if (0 == strcmp(_write, "exit.."))
+		fd_set _fdRead;
+		FD_ZERO(&_fdRead);
+		FD_SET(_sock, &_fdRead);
+		//timeval t = { 0,0 };
+
+		int ret = select(_sock, &_fdRead, 0, 0, 0);
+		if (ret < 0)
 		{
-			printf("exit client\n");
+			printf("select() Error...\n");
 			break;
 		}
-		else if(0 == strcmp(_write, "login"))
+		if (FD_ISSET(_sock, &_fdRead))
 		{
-			strcpy(_login->_userName, "admin");
-			strcpy(_login->_userPassWord, "admin123");
-
-
-			send(_sock, (const char*)_login, sizeof(Login), 0);
-		}
-		else if (0 == strcmp(_write, "loginOut"))
-		{
-			strcpy(_loginOut->_userName, "admin");
-
-			send(_sock, (const char*)_loginOut, sizeof(LoginOut), 0);
-		}
-		else
-		{
-			printf("Unable to parse command\n");
-			continue;
-		}
-
-		int ret = recv(_sock, (char*)_dataRecv, sizeof(DataHeader), 0);
-		DataHeader* _header = (DataHeader*)_dataRecv;
-		if (ret > 0)
-		{
-			switch (_header->_cmd)
+			FD_CLR(_sock, &_fdRead);
+			int ret = recv(_sock, (char*)_dataRecv, sizeof(DataHeader), 0);
+			DataHeader* _header = (DataHeader*)_dataRecv;
+			if (-1 == processor(_sock))
 			{
-				case CMD_LOGIN_RESULT:
-				{
-					ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), _header->_dataLength - sizeof(DataHeader), 0);
-					LoginResult* _loginRe = (LoginResult*)_dataRecv + sizeof(DataHeader);
-					if (ret > 0)
-					{
-						printf("rece: return %d\n", _loginRe->_result);
-					}
-				}
-				break;
-				case CMD_LOGIN_OUT_RESULT:
-				{
-					ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(LoginOutResult) - sizeof(DataHeader), 0);
-					LoginOutResult* _loginOutRe = (LoginOutResult*)_dataRecv + sizeof(DataHeader);
-					if (ret > 0)
-					{
-						printf("rece: return %d\n", _loginOutRe->_result);
-					}
-				}
-				break;
-			default:
-				printf("receive: Unable to parse command!\n");
+				printf("select() task over...\n");
 				break;
 			}
 		}
+		memset(_login->_userName, 0, sizeof(_login->_userName));
+		memset(_login->_userPassWord, 0, sizeof(_login->_userPassWord));
+
+		memcpy(_login->_userName, "ollen", strlen("ollen"));
+		memcpy(_login->_userPassWord, "123456", strlen("123456"));
+		send(_sock, (const char*)_login, _msize(_login), 0);
+
+		Sleep(4000);
 	}
 
 	// 4 Close Socket
