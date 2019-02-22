@@ -7,6 +7,8 @@
 
 #include <stdio.h>
 #include <memory>
+#include <vector>
+
 
 //Command
 enum CMD
@@ -15,7 +17,7 @@ enum CMD
 	CMD_LOGIN_RESULT,
 	CMD_LOGIN_OUT,
 	CMD_LOGIN_OUT_RESULT,
-	CMD_EROOR
+	CMD_ERROR
 };
 
 //Data struct header
@@ -34,8 +36,8 @@ struct Login : public DataHeader
 		_dataLength = sizeof(Login);
 		_cmd = CMD_LOGIN;
 	}
-	char _userName[32] = {};
-	char _userPassWord[32] = {};
+	char _userName[32];
+	char _userPassWord[32];
 };
 
 //Return Command result
@@ -74,6 +76,78 @@ struct LoginOutResult : public DataHeader
 	}
 	int _result;
 };
+
+std::vector<SOCKET> g_clients;
+
+LoginResult* _loginRe = new LoginResult;
+
+LoginOutResult* _loginOutRe = new LoginOutResult;
+
+char* _dataRecv = (char*)malloc(sizeof(char) * 4096);
+
+
+int processor(SOCKET _cSock)
+{
+	int nLen = recv(_cSock, (char*)_dataRecv, sizeof(DataHeader), 0);
+	DataHeader* _header = (DataHeader*)_dataRecv;
+
+	printf("recv: DataHeader, DataLength: %d\n", _header->_dataLength);
+
+	if (nLen <= 0)
+	{
+		printf("Client close...\n");
+		return -1;
+	}
+
+	/*
+	//Determine whether the data is larger than the data header
+	if (nLen >= sizeof(DataHeader))
+	{
+	//Stick package problem
+	}
+	*/
+	switch (_header->_cmd)
+	{
+	case CMD_LOGIN:
+	{
+		recv(_cSock, (char*)_dataRecv + sizeof(DataHeader), _header->_dataLength - sizeof(DataHeader), 0);
+		Login* _login = (Login*)_dataRecv;
+		printf("recv: CMD_LOGIN, DataLength: %d\n", _login->_dataLength);
+		printf("UserName: %s, UserPassWord; %s\n", _login->_userName, _login->_userPassWord);
+
+		//receive Login struct, you can check data is right
+		send(_cSock, (const char*)_loginRe, sizeof(LoginResult), 0);
+
+		memset(_header, 0, sizeof(DataHeader));
+	}
+	break;
+	case CMD_LOGIN_OUT:
+	{
+		recv(_cSock, (char*)_dataRecv + sizeof(DataHeader), sizeof(LoginOut) - sizeof(DataHeader), 0);
+		LoginOut* _loginOut = (LoginOut*)_dataRecv;
+		//receive Login struct, you can check data is right
+		printf("recv: CMD_LOGIN_OUT, DataLength: %d\n", _loginOut->_dataLength);
+		printf("UserName: %s \n", "admin");
+
+		send(_cSock, (const char*)_loginOutRe, sizeof(LoginOutResult), 0);
+
+		memset(_header, 0, sizeof(DataHeader));
+	}
+	break;
+	default:
+	{
+		printf("recv: Unable analysis CMD\n");
+		_header->_cmd = CMD_ERROR;
+		_header->_dataLength = 0;
+
+		send(_cSock, (char*)_header, sizeof(DataHeader), 0);
+
+		memset(_header, 0, sizeof(DataHeader));
+	}
+	break;
+	}
+	memset(_dataRecv, 0, _msize(_dataRecv));
+}
 
 
 int main()
@@ -116,98 +190,108 @@ int main()
 		printf("==SUCCESS==: listen socket success!\n");
 	}
 
-	// 4 Accept Client Connect
-	char _msgBuf[] = "Hello, I'm Server.";
-	sockaddr_in _client = {};
-	int _nAddrLen = sizeof(_client);
-	SOCKET _cSock = INVALID_SOCKET;
-	_cSock = accept(_sock, (sockaddr*)&_client, &_nAddrLen);
-	if (INVALID_SOCKET == _cSock)
-	{
-		printf("==ERROR==: accept invalid Clinet!\n");
-	}
-	else
-	{
-		printf("==SUCCESS==: accept Clinet!\n");
-		printf("==Clinet==: Socket: %d  IP : %s\n", (int)_cSock, inet_ntoa(_client.sin_addr));
-	}
-
-	// 5 Send/Receive Data for Client
-	LoginResult* _loginRe = new LoginResult;
-
-	LoginOutResult* _loginOutRe = new LoginOutResult;
-
-	char* _dataRecv = (char*)malloc(sizeof(char) * 4096);
-	memset(_dataRecv, 0, _msize(_dataRecv));
-	
 	while (true)
 	{
+		//Berkeley sockets
 
-		int ret = recv(_cSock, (char*)_dataRecv, sizeof(DataHeader), 0);
-		DataHeader* _header = (DataHeader*)_dataRecv;
-
-		printf("recv: DataHeader, DataLength: %d\n", _header->_dataLength);
-
-		if (ret <= 0)
+		/********************************
+		typedef struct fd_set
 		{
-			printf("Client close...\n");
+			u_int fd_count;               // how many are SET?
+			SOCKET  fd_array[FD_SETSIZE];  // an array of SOCKETs
+		} fd_set;
+		********************************/
+		fd_set _fdRead;
+		fd_set _fdWrite;
+		fd_set _fdExp;
+
+		//#define FD_ZERO(set) (((fd_set FAR *)(set))->fd_count=0)
+		FD_ZERO(&_fdRead);
+		FD_ZERO(&_fdWrite);
+		FD_ZERO(&_fdExp);
+
+		FD_SET(_sock, &_fdRead);
+		FD_SET(_sock, &_fdWrite);
+		FD_SET(_sock, &_fdExp);
+
+		/********************************
+		* I made a mistake here
+		* g_clients[n] not additon _fdread
+		for (int n = (int)g_clients.size() -1; n > 0; n--)
+		{
+
+			FD_SET(g_clients[n], &_fdRead);
+		}
+		**********************************/
+		//Determine if there is any data received
+		for (int n = 0; n < (int)g_clients.size(); n++)
+		{
+
+			FD_SET(g_clients[n], &_fdRead);
+		}
+		/************************
+		select(
+			_In_ int nfds,
+			_Inout_opt_ fd_set FAR * readfds,
+			_Inout_opt_ fd_set FAR * writefds,
+			_Inout_opt_ fd_set FAR * exceptfds,
+			_In_opt_ const struct timeval FAR * timeout
+			);
+		**************************/
+		//nfds is range of sockets, Is not sokcets number
+		timeval t = { 0,0 };
+		int ret = select(_sock + 1, &_fdRead, &_fdWrite, &_fdExp, &t);
+		if (ret < 0)
+		{
+			printf("select task over...\n");
+
 			break;
 		}
-		
-		/*		
-		//Determine whether the data is larger than the data header
-		if (ret >= sizeof(DataHeader))
+		if (FD_ISSET(_sock, &_fdRead))
 		{
-			//Stick package problem
-		}
-		*/
-		switch (_header->_cmd)
-		{
-			case CMD_LOGIN:
+			FD_CLR(_sock, &_fdRead);
+
+			// 4 Accept Client Connect
+			sockaddr_in _client = {};
+			int _nAddrLen = sizeof(_client);
+			SOCKET _cSock = INVALID_SOCKET;
+			_cSock = accept(_sock, (sockaddr*)&_client, &_nAddrLen);
+			if (INVALID_SOCKET == _cSock)
 			{
-				recv(_cSock, (char*)_dataRecv + sizeof(DataHeader), _header->_dataLength - sizeof(DataHeader), 0);
-				Login* _login = (Login*)_dataRecv;
-				printf("recv: CMD_LOGIN, DataLength: %d\n", _login->_dataLength);
-				printf("UserName: %s, UserPassWord; %s\n", _login->_userName, _login->_userPassWord);
-
-				//receive Login struct, you can check data is right
-				send(_cSock, (const char*)_loginRe, sizeof(LoginResult), 0);
-
-				memset(_header, 0, sizeof(DataHeader));
+				printf("==ERROR==: accept invalid Clinet!\n");
 			}
-			break;
-			case CMD_LOGIN_OUT:
-			{
-				recv(_cSock, (char*)_dataRecv + sizeof(DataHeader), sizeof(LoginOut) - sizeof(DataHeader), 0);
-				LoginOut* _loginOut = (LoginOut*)_dataRecv;
-				//receive Login struct, you can check data is right
-				printf("recv: CMD_LOGIN_OUT, DataLength: %d\n", _loginOut->_dataLength);
-				printf("UserName: %s \n", "admin");
 
-				send(_cSock, (const char*)_loginOutRe, sizeof(LoginOutResult), 0);
+			printf("==SUCCESS==: accept Clinet!\n");
+			printf("==Clinet==: Socket: %d  IP : %s\n", (int)_cSock, inet_ntoa(_client.sin_addr));
 
-				memset(_header, 0, sizeof(DataHeader));
-			}
-			break;
-		default:
-			printf("recv: Unable analysis CMD\n");
-			_header->_cmd = CMD_EROOR;
-			_header->_dataLength = 0;
+			g_clients.push_back(_cSock);
 
-			send(_cSock, (char*)_header, sizeof(DataHeader), 0);
 
-			memset(_header, 0, sizeof(DataHeader));
-			break;
 		}
-		memset(_dataRecv, 0, _msize(_dataRecv));
+
+		for (size_t n = 0; n < _fdRead.fd_count; n++)
+		{
+			// 5 Send/Receive Data for Client
+			if (-1 == processor(_fdRead.fd_array[n]))
+			{
+				auto iter = find(g_clients.begin(), g_clients.end(), _fdRead.fd_array[n]);
+				if (iter != g_clients.end())
+				{
+					g_clients.erase(iter);
+				}
+			}
+		}
+		//printf("Wait for the task...\n");
 	}
-
-
 	// 6 Close Socket
+	for (size_t n = 0; n < g_clients.size(); n++)
+	{
+		closesocket(g_clients[n]);
+	}
 	closesocket(_sock);
 	free(_loginRe);
 	free(_loginOutRe);
-	free(_dataRecv);
+	//free(_dataRecv);
 
 	//Clean Windows socket Envoronment
 	WSACleanup();

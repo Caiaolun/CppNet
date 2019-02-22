@@ -10,7 +10,6 @@
 #include <stdlib.h>
 
 
-
 //Command
 enum CMD
 {
@@ -18,7 +17,7 @@ enum CMD
 	CMD_LOGIN_RESULT,
 	CMD_LOGIN_OUT,
 	CMD_LOGIN_OUT_RESULT,
-	CMD_EROOR
+	CMD_ERROR
 };
 
 //Data struct header
@@ -37,8 +36,8 @@ struct Login : public DataHeader
 		_dataLength = sizeof(Login);
 		_cmd = CMD_LOGIN;
 	}
-	char _userName[32] = {};
-	char _userPassWord[32] = {};
+	char _userName[32];
+	char _userPassWord[32];
 };
 
 //Return Command result
@@ -48,6 +47,7 @@ struct LoginResult : public DataHeader
 	{
 		_dataLength = sizeof(LoginResult);
 		_cmd = CMD_LOGIN_RESULT;
+		//if Login struct data is right, we can send result=0 for client
 		_result = 0;
 	}
 	int _result;
@@ -60,9 +60,8 @@ struct LoginOut : public DataHeader
 	{
 		_dataLength = sizeof(LoginOut);
 		_cmd = CMD_LOGIN_OUT;
-		_userName = new char[32];
 	}
-	char* _userName;
+	char _userName[32];
 };
 
 //Return Command result
@@ -72,10 +71,12 @@ struct LoginOutResult : public DataHeader
 	{
 		_dataLength = sizeof(LoginOutResult);
 		_cmd = CMD_LOGIN_OUT_RESULT;
+		//if Login struct data is right, we can send result=0 for client
 		_result = 0;
 	}
 	int _result;
 };
+
 
 
 int main()
