@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <memory>
 #include <stdlib.h>
+#include <thread>
 
 
 //Command
@@ -108,49 +109,81 @@ int processor(SOCKET _sock)
 		return -1;
 	}
 
+
+	int ret = 0;
 	switch (_header->_cmd)
 	{
-		int ret = 0;
-		switch (_header->_cmd)
+	case CMD_LOGIN_RESULT:
+	{
+		ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), _header->_dataLength - sizeof(DataHeader), 0);
+		LoginResult* _loginRe = (LoginResult*)_dataRecv + sizeof(DataHeader);
+		if (ret > 0)
 		{
-		case CMD_LOGIN_RESULT:
-		{
-			ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), _header->_dataLength - sizeof(DataHeader), 0);
-			LoginResult* _loginRe = (LoginResult*)_dataRecv + sizeof(DataHeader);
-			if (ret > 0)
-			{
-				printf("rece: return %d\n", _loginRe->_result);
-			}
-		}
-		break;
-		case CMD_LOGIN_OUT_RESULT:
-		{
-			ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(LoginOutResult) - sizeof(DataHeader), 0);
-			LoginOutResult* _loginOutRe = (LoginOutResult*)_dataRecv + sizeof(DataHeader);
-			if (ret > 0)
-			{
-				printf("rece: return %d\n", _loginOutRe->_result);
-			}
-		}
-		break;
-		case CMD_NEW_USER_JOIN:
-		{
-			ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(NewUserJoin) - sizeof(DataHeader), 0);
-			NewUserJoin* _Uers = (NewUserJoin*)_dataRecv + sizeof(DataHeader);
-			if (ret > 0)
-			{
-				printf("rece: New client: %d com here...\n", _Uers->_socke);
-			}
-		}
-		break;
-		default:
-			printf("receive: Unable to parse command!\n");
-			break;
+			printf("rece: CMD_LOGIN_RESULT %d\n", _loginRe->_result);
 		}
 	}
+	break;
+	case CMD_LOGIN_OUT_RESULT:
+	{
+		ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(LoginOutResult) - sizeof(DataHeader), 0);
+		LoginOutResult* _loginOutRe = (LoginOutResult*)_dataRecv + sizeof(DataHeader);
+		if (ret > 0)
+		{
+			printf("rece: CMD_LOGIN_OUT_RESULT %d\n", _loginOutRe->_result);
+		}
+	}
+	break;
+	case CMD_NEW_USER_JOIN:
+	{
+		ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(NewUserJoin) - sizeof(DataHeader), 0);
+		NewUserJoin* _Uers = (NewUserJoin*)_dataRecv + sizeof(DataHeader);
+		if (ret > 0)
+		{
+			printf("rece: New client: %d com here...\n", _Uers->_socke);
+		}
+	}
+	break;
+	default:
+		printf("receive: Unable to parse command!\n");
+		break;
+	}
+	
 	memset(_dataRecv, 0, _msize(_dataRecv));
 }
+char _write[32];
+int SendCMD(SOCKET _sock)
+{
+	while (true)
+	{
+		scanf("%s", _write);
 
+		if (0 == strcmp(_write, "exit.."))
+		{
+			printf("exit client\n");
+			break;
+		}
+		else if (0 == strcmp(_write, "login"))
+		{
+			strcpy(_login->_userName, "admin");
+			strcpy(_login->_userPassWord, "admin123");
+
+
+			send(_sock, (const char*)_login, sizeof(Login), 0);
+		}
+		else if (0 == strcmp(_write, "loginOut"))
+		{
+			strcpy(_loginOut->_userName, "admin");
+
+			send(_sock, (const char*)_loginOut, sizeof(LoginOut), 0);
+		}
+		else
+		{
+			printf("Unable to parse command\n");
+			continue;
+		}
+	}
+	return 0;
+}
 
 int main()
 {
@@ -186,18 +219,18 @@ int main()
 	}
 
 	// 3 Receive/Send Server Data
-
+	//Æô¶¯Ïß³Ì
+	std::thread t1(SendCMD, _sock);
+	t1.detach();
 
 	while (true)
 	{
-
-
 		fd_set _fdRead;
 		FD_ZERO(&_fdRead);
 		FD_SET(_sock, &_fdRead);
-		//timeval t = { 0,0 };
+		timeval t = { 0,0 };
 
-		int ret = select(_sock, &_fdRead, 0, 0, 0);
+		int ret = select(_sock, &_fdRead, 0, 0, &t);
 		if (ret < 0)
 		{
 			printf("select() Error...\n");
@@ -206,22 +239,22 @@ int main()
 		if (FD_ISSET(_sock, &_fdRead))
 		{
 			FD_CLR(_sock, &_fdRead);
-			int ret = recv(_sock, (char*)_dataRecv, sizeof(DataHeader), 0);
-			DataHeader* _header = (DataHeader*)_dataRecv;
+			//int ret = recv(_sock, (char*)_dataRecv, sizeof(DataHeader), 0);
+			//DataHeader* _header = (DataHeader*)_dataRecv;
 			if (-1 == processor(_sock))
 			{
 				printf("select() task over...\n");
 				break;
 			}
 		}
-		memset(_login->_userName, 0, sizeof(_login->_userName));
-		memset(_login->_userPassWord, 0, sizeof(_login->_userPassWord));
+		//memset(_login->_userName, 0, sizeof(_login->_userName));
+		//memset(_login->_userPassWord, 0, sizeof(_login->_userPassWord));
 
-		memcpy(_login->_userName, "ollen", strlen("ollen"));
-		memcpy(_login->_userPassWord, "123456", strlen("123456"));
-		send(_sock, (const char*)_login, _msize(_login), 0);
+		//memcpy(_login->_userName, "ollen", strlen("ollen"));
+		//memcpy(_login->_userPassWord, "123456", strlen("123456"));
+		//send(_sock, (const char*)_login, _msize(_login), 0);
 
-		Sleep(4000);
+		//Sleep(4000);
 	}
 
 	// 4 Close Socket
