@@ -3,6 +3,18 @@
 #define WIN32_LEAN_AND_MEAN
 #include<WinSock2.h>
 #include <Windows.h>
+
+#pragma comment(lib,"ws2_32.lib")
+#else
+#include <arpa/inet.h>
+#include <string.h>
+#include <unistd.h>
+#include <malloc.h>
+
+
+#define SOCKET int
+#define INVALID_SOCKET (SOCKET)(~0)
+#define SOCKET_ERROR -1;
 #endif // _WIN32
 
 #include <stdio.h>
@@ -27,7 +39,6 @@ struct DataHeader
 {
 	int _cmd;
 	int _dataLength;
-	int _maxDataLength;
 };
 
 //Data struct body
@@ -116,7 +127,7 @@ int processor(SOCKET _sock)
 	case CMD_LOGIN_RESULT:
 	{
 		ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), _header->_dataLength - sizeof(DataHeader), 0);
-		LoginResult* _loginRe = (LoginResult*)_dataRecv + sizeof(DataHeader);
+		LoginResult* _loginRe = (LoginResult*)_dataRecv;
 		if (ret > 0)
 		{
 			printf("rece: CMD_LOGIN_RESULT %d\n", _loginRe->_result);
@@ -126,7 +137,7 @@ int processor(SOCKET _sock)
 	case CMD_LOGIN_OUT_RESULT:
 	{
 		ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(LoginOutResult) - sizeof(DataHeader), 0);
-		LoginOutResult* _loginOutRe = (LoginOutResult*)_dataRecv + sizeof(DataHeader);
+		LoginOutResult* _loginOutRe = (LoginOutResult*)_dataRecv;
 		if (ret > 0)
 		{
 			printf("rece: CMD_LOGIN_OUT_RESULT %d\n", _loginOutRe->_result);
@@ -136,7 +147,7 @@ int processor(SOCKET _sock)
 	case CMD_NEW_USER_JOIN:
 	{
 		ret = recv(_sock, (char*)_dataRecv + sizeof(DataHeader), sizeof(NewUserJoin) - sizeof(DataHeader), 0);
-		NewUserJoin* _Uers = (NewUserJoin*)_dataRecv + sizeof(DataHeader);
+		NewUserJoin* _Uers = (NewUserJoin*)_dataRecv;
 		if (ret > 0)
 		{
 			printf("rece: New client: %d com here...\n", _Uers->_socke);
@@ -147,9 +158,15 @@ int processor(SOCKET _sock)
 		printf("receive: Unable to parse command!\n");
 		break;
 	}
-	
+#ifdef _WIN32
 	memset(_dataRecv, 0, _msize(_dataRecv));
+#else
+	memset(_dataRecv, 0, malloc_usable_size(_dataRecv));
+#endif // _WIN32
+
+
 }
+bool g_selectOff = true;
 char _write[32];
 int SendCMD(SOCKET _sock)
 {
@@ -160,6 +177,7 @@ int SendCMD(SOCKET _sock)
 		if (0 == strcmp(_write, "exit.."))
 		{
 			printf("exit client\n");
+			g_selectOff = false;
 			break;
 		}
 		else if (0 == strcmp(_write, "login"))
@@ -192,6 +210,7 @@ int main()
 	WORD _ver = MAKEWORD(2, 2);
 	WSADATA _data;
 	WSAStartup(_ver, &_data);
+#endif
 
 	// 1 Build Socket
 	SOCKET _sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -208,8 +227,12 @@ int main()
 	sockaddr_in _server = {};
 	_server.sin_family = AF_INET;
 	_server.sin_port = htons(4567);
+#ifdef _WIN32
 	_server.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-	if (SOCKET_ERROR == connect(_sock, (sockaddr*)&_server, sizeof(_server)))
+#else
+	_server.sin_addr.s_addr = inet_addr("192.168.0.5");
+#endif
+	if (-1 == connect(_sock, (sockaddr*)&_server, sizeof(_server)))
 	{
 		printf("==ERROR==: connect server faild...\n");
 	}
@@ -223,14 +246,15 @@ int main()
 	std::thread t1(SendCMD, _sock);
 	t1.detach();
 
-	while (true)
+	while (g_selectOff)
 	{
 		fd_set _fdRead;
 		FD_ZERO(&_fdRead);
 		FD_SET(_sock, &_fdRead);
 		timeval t = { 0,0 };
 
-		int ret = select(_sock, &_fdRead, 0, 0, &t);
+		//if sock not add 1, select recv't message in the linux
+		int ret = select(_sock + 1, &_fdRead, 0, 0, &t);
 		if (ret < 0)
 		{
 			printf("select() Error...\n");
@@ -247,22 +271,15 @@ int main()
 				break;
 			}
 		}
-		//memset(_login->_userName, 0, sizeof(_login->_userName));
-		//memset(_login->_userPassWord, 0, sizeof(_login->_userPassWord));
-
-		//memcpy(_login->_userName, "ollen", strlen("ollen"));
-		//memcpy(_login->_userPassWord, "123456", strlen("123456"));
-		//send(_sock, (const char*)_login, _msize(_login), 0);
-
-		//Sleep(4000);
 	}
 
 	// 4 Close Socket
+#ifdef _WIN32
 	closesocket(_sock);
-
-
 	//Clean Windows socket Envoronment
 	WSACleanup();
+#else
+	close(_sock);
 #endif // _WIN32
 
 	getchar();

@@ -26,7 +26,6 @@ struct DataHeader
 {
 	int _cmd;
 	int _dataLength;
-	int _maxDataLength;
 };
 
 //Data struct body
@@ -93,7 +92,7 @@ std::vector<SOCKET> g_clients;
 
 NewUserJoin* _newUserJoin = new NewUserJoin();
 
-LoginResult* _loginRe = new LoginResult();
+//LoginResult* _loginRe = new LoginResult();
 
 LoginOutResult* _loginOutRe = new LoginOutResult();
 
@@ -130,7 +129,8 @@ int processor(SOCKET _cSock)
 		printf("UserName: %s, UserPassWord; %s\n", _login->_userName, _login->_userPassWord);
 
 		//receive Login struct, you can check data is right
-		send(_cSock, (const char*)_loginRe, sizeof(LoginResult), 0);
+		LoginResult _loginRe;
+		send(_cSock, (const char*)&_loginRe, sizeof(LoginResult), 0);
 
 		memset(_header, 0, sizeof(DataHeader));
 	}
@@ -310,7 +310,7 @@ int main()
 		closesocket(g_clients[n]);
 	}
 	closesocket(_sock);
-	free(_loginRe);
+	//free(_loginRe);
 	free(_loginOutRe);
 	//free(_dataRecv);
 
