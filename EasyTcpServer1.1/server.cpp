@@ -3,9 +3,20 @@
 #define WIN32_LEAN_AND_MEAN
 #include <WinSock2.h>
 #include <Windows.h>
+
+#else
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <malloc.h>
+#include <string.h>
+
+#define SOCKET int
+#define SOCKET_ERROR -1
+#define INVALID_SOCKET (SOCKET)(~0)
 #endif // WIN32
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <memory>
 #include <vector>
 
@@ -160,7 +171,11 @@ int processor(SOCKET _cSock)
 	}
 	break;
 	}
+#ifdef _WIN32
 	memset(_dataRecv, 0, _msize(_dataRecv));
+#else
+	memset(_dataRecv, 0, 4096);
+#endif
 }
 
 
@@ -171,7 +186,7 @@ int main()
 	WORD _ver = MAKEWORD(2, 2);
 	WSADATA _data;
 	WSAStartup(_ver, &_data);
-
+#endif
 	// 1 Build Socket
 	SOCKET _sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -184,7 +199,11 @@ int main()
 	//Only the connection local IP
 	//_sin.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
 	// Accept All IP Conection
+#ifdef _WIN32
 	_sin.sin_addr.S_un.S_addr = INADDR_ANY;
+#else
+	_sin.sin_addr.s_addr = INADDR_ANY;
+#endif
 	if (SOCKET_ERROR == bind(_sock, (sockaddr*)&_sin, sizeof(_sin)))
 	{
 		printf("==ERROR==: bind IP faild!\n");
@@ -211,8 +230,8 @@ int main()
 		/********************************
 		typedef struct fd_set
 		{
-			u_int fd_count;               // how many are SET?
-			SOCKET  fd_array[FD_SETSIZE];  // an array of SOCKETs
+		u_int fd_count;               // how many are SET?
+		SOCKET  fd_array[FD_SETSIZE];  // an array of SOCKETs
 		} fd_set;
 		********************************/
 		fd_set _fdRead;
@@ -228,13 +247,16 @@ int main()
 		FD_SET(_sock, &_fdWrite);
 		FD_SET(_sock, &_fdExp);
 
+		SOCKET maxSocket = _sock;
+
+		timeval t = { 0,0 };
 		/********************************
 		* I made a mistake here
 		* g_clients[n] not additon _fdread
 		for (int n = (int)g_clients.size() -1; n > 0; n--)
 		{
 
-			FD_SET(g_clients[n], &_fdRead);
+		FD_SET(g_clients[n], &_fdRead);
 		}
 		**********************************/
 		//Determine if there is any data received
@@ -242,19 +264,24 @@ int main()
 		{
 
 			FD_SET(g_clients[n], &_fdRead);
+			if (maxSocket < g_clients[n])
+			{
+				//select first parameter must max socket in linux
+				maxSocket = g_clients[n];
+			}
 		}
+		//nfds is range of sockets, Is not sokcets number
 		/************************
 		select(
-			_In_ int nfds,
-			_Inout_opt_ fd_set FAR * readfds,
-			_Inout_opt_ fd_set FAR * writefds,
-			_Inout_opt_ fd_set FAR * exceptfds,
-			_In_opt_ const struct timeval FAR * timeout
-			);
+		_In_ int nfds,
+		_Inout_opt_ fd_set FAR * readfds,
+		_Inout_opt_ fd_set FAR * writefds,
+		_Inout_opt_ fd_set FAR * exceptfds,
+		_In_opt_ const struct timeval FAR * timeout
+		);
 		**************************/
-		//nfds is range of sockets, Is not sokcets number
-		timeval t = { 0,0 };
-		int ret = select(_sock + 1, &_fdRead, &_fdWrite, &_fdExp, &t);
+		//select first parameter must max socket in linux, But in WIN32, it doesn't matter what the value is
+		int ret = select(maxSocket + 1, &_fdRead, &_fdWrite, &_fdExp, &t);
 		if (ret < 0)
 		{
 			printf("select task over...\n");
@@ -269,7 +296,11 @@ int main()
 			sockaddr_in _client = {};
 			int _nAddrLen = sizeof(_client);
 			SOCKET _cSock = INVALID_SOCKET;
+#ifdef _WIN32
 			_cSock = accept(_sock, (sockaddr*)&_client, &_nAddrLen);
+#else
+			_cSock = accept(_sock, (sockaddr*)&_client, (socklen_t *)&_nAddrLen);
+#endif
 			if (INVALID_SOCKET == _cSock)
 			{
 				printf("==ERROR==: accept invalid Clinet!\n");
@@ -289,31 +320,60 @@ int main()
 
 
 		}
-
-		for (size_t n = 0; n < _fdRead.fd_count; n++)
+		for (int n = 0; n < (int)g_clients.size(); n++)
 		{
-			// 5 Send/Receive Data for Client
-			if (-1 == processor(_fdRead.fd_array[n]))
+
+			if (FD_ISSET(g_clients[n], &_fdRead))
 			{
-				auto iter = find(g_clients.begin(), g_clients.end(), _fdRead.fd_array[n]);
-				if (iter != g_clients.end())
+				if (-1 == processor(g_clients[n]))
 				{
-					g_clients.erase(iter);
+					auto iter = g_clients.begin();
+					if (iter != g_clients.end())
+					{
+						g_clients.erase(iter);
+					}
 				}
 			}
 		}
+
+		/**********************************
+		* Can only be used _fdRead.fd_count on WIN32
+		*
+		*
+		for (size_t n = 0; n < _fdRead.fd_count; n++)
+		{
+		// 5 Send/Receive Data for Client
+		if (-1 == processor(_fdRead.fd_array[n]))
+		{
+		auto iter = find(g_clients.begin(), g_clients.end(), _fdRead.fd_array[n]);
+		if (iter != g_clients.end())
+		{
+		g_clients.erase(iter);
+		}
+		}
+		}
+		***********************************/
 		//printf("Wait for the task...\n");
 	}
 	// 6 Close Socket
 	for (size_t n = 0; n < g_clients.size(); n++)
 	{
+#ifdef _WIN32
 		closesocket(g_clients[n]);
+#else
+		close(g_clients[n]);
+#endif
 	}
+
+#ifdef _WIN32
 	closesocket(_sock);
+#else
+	close(_sock);
+#endif
 	//free(_loginRe);
 	free(_loginOutRe);
 	//free(_dataRecv);
-
+#ifdef _WIN32
 	//Clean Windows socket Envoronment
 	WSACleanup();
 #endif // _WIN32

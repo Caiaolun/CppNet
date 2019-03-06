@@ -164,7 +164,7 @@ int processor(SOCKET _sock)
 	memset(_dataRecv, 0, malloc_usable_size(_dataRecv));
 #endif // _WIN32
 
-
+	
 }
 bool g_selectOff = true;
 char _write[32];
