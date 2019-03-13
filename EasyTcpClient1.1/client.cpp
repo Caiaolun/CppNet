@@ -79,15 +79,21 @@ int main()
 
 	EasyTcpClient client1;
 
-	client1.Connect("192.168.0.108", 4567);
+	client1.Connect("192.168.0.5", 4567);
 
-	std::thread t1(SendCMD, &client1);
+	//std::thread t1(SendCMD, &client1);
 
-	t1.detach();
+	//t1.detach();
 
+	Login _login;
+
+	strcpy(_login._userName, "admin");
+
+	strcpy(_login._userPassWord, "123456");
 	while (client1.IsRun())
 	{
 		client1.OnRun();
+		client1.SendData(&_login);
 	}
 
 	client1.Closesocket();

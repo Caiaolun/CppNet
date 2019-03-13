@@ -11,7 +11,6 @@ int main()
 	//server.Bind("127.0.0.1", 4567);
 	server.Bind();
 	server.Listen(5);
-	//server.Accept();
 
 	while (server.IsRun())
 	{
