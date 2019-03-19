@@ -27,8 +27,8 @@
 
 
 #include "MesProtocol.hpp"
-#define DATA_BUF_LEN 409600
-#define MESSAGE_BUF_LEN 10240
+#define DATA_BUF_LEN 4096000
+#define MESSAGE_BUF_LEN 1024000
 class ClientSocket
 {
 public:
@@ -47,7 +47,8 @@ private:
 ClientSocket::ClientSocket(SOCKET socket)
 {
 	_dataMessage = (char*)malloc(sizeof(char)*MESSAGE_BUF_LEN);
-	SOCKET _cSocket = socket;
+	memset(_dataMessage, 0, MESSAGE_BUF_LEN);
+	_cSocket = socket;
 	int _pSit = 0;
 }
 
@@ -103,6 +104,7 @@ EasyTcpServer::EasyTcpServer()
 	_sock = INVALID_SOCKET;
 	_cSock = INVALID_SOCKET;
 	_dataRecv = (char*)malloc(sizeof(char) * DATA_BUF_LEN);
+	memset(_dataRecv, 0, DATA_BUF_LEN);
 }
 
 EasyTcpServer::~EasyTcpServer()
@@ -293,13 +295,21 @@ int EasyTcpServer::RecvData(ClientSocket* client)
 	char* tempBuf = client->GetDataBuf();
 
 	int nLen = recv(tempSocket, (char*)_dataRecv, DATA_BUF_LEN, 0);
-	if (nLen <= 0)
+	if (nLen < 0)
 	{
-		printf("Client close...\n");
+		return nLen;
+	}
+	else if (nLen == 0)
+	{
+		printf("ClientID: %d close...\n", client->GetSocket());
 		return nLen;
 	}
 	memcpy(tempBuf + tempPSit, _dataRecv, nLen);
 	tempPSit += nLen;
+	if (tempPSit > DATA_BUF_LEN)
+	{
+		printf("Error: memory overflow!!!\n");
+	}
 	while (tempPSit >= sizeof(DataHeader))
 	{
 		DataHeader* header = (DataHeader*)tempBuf;
@@ -355,6 +365,11 @@ void EasyTcpServer::OnNetMsg(SOCKET _cSock, DataHeader* _header)
 		SendData(_cSock, &loginOutRe);
 	}
 	break;
+	case CMD_ERROR:
+	{
+		printf("rece: CMD_ERROR!!! data length: %d\n", _header->_dataLength);
+	}
+	break;
 	default:
 	{
 		printf("recv: Unable analysis CMD\n");
@@ -395,7 +410,7 @@ bool EasyTcpServer::OnRun()
 
 	SOCKET maxSocket = _sock;
 
-	timeval t = { 0,0 };
+	timeval t = { 0,1 };
 
 	//Determine if there is any data received
 	for (int n = 0; n < (int)g_clients.size(); n++)
@@ -427,7 +442,7 @@ bool EasyTcpServer::OnRun()
 
 		if (FD_ISSET(g_clients[n]->GetSocket(), &_fdRead))
 		{
-			if (-1 == RecvData(g_clients[n]))
+			if (-1 == RecvData(g_clients[n]) || 0 == RecvData(g_clients[n]))
 			{
 				auto iter = g_clients.begin() + n;
 				if (iter != g_clients.end())

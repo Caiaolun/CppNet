@@ -53,8 +53,8 @@
 #include "MesProtocol.hpp"
 
 
-#define DATA_BUF_LEN 1024
-#define MESSAGE_BUF_LEN 102400
+#define DATA_BUF_LEN 102400
+#define MESSAGE_BUF_LEN 1024000
 
 class EasyTcpClient
 
@@ -271,7 +271,7 @@ bool EasyTcpClient::OnRun()
 
 		FD_SET(_sock, &_fdRead);
 
-		timeval t = { 0,0 };
+		timeval t = { 0,1 };
 
 		//if sock not add 1, select recv't message in the linux
 		int ret = select(_sock + 1, &_fdRead, 0, 0, &t);
@@ -420,7 +420,12 @@ int EasyTcpClient::SendData(DataHeader* header)
 {
 	if (IsRun() && header)
 	{
-		return send(_sock, (const char*)header, header->_dataLength, 0);
+		int ret = send(_sock, (const char*)header, header->_dataLength, 0);
+		//if (ret == EINTR || ret == EWOULDBLOCK || ret == EAGAIN)
+		//{
+		//	printf("SendData faild!!!\n");
+		//}
+		return ret;
 	}
 	return SOCKET_ERROR;
 }
