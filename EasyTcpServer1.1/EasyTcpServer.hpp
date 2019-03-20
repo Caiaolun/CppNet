@@ -4,6 +4,17 @@
 
 
 #ifdef _WIN32
+/**********************************
+#ifndef FD_SETSIZE
+#define FD_SETSIZE      64
+#endif //FD_SETSIZE 
+
+typedef struct fd_set {
+	u_int fd_count;              // how many are SET? 
+	SOCKET  fd_array[FD_SETSIZE];   // an array of SOCKETs 
+} fd_set;
+**********************************/
+#define FD_SETSIZE 1024
 #define WIN32_LEAN_AND_MEAN
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <WinSock2.h>
@@ -27,8 +38,8 @@
 
 
 #include "MesProtocol.hpp"
-#define DATA_BUF_LEN 4096000
-#define MESSAGE_BUF_LEN 1024000
+#define DATA_BUF_LEN 40960
+#define MESSAGE_BUF_LEN 10240
 class ClientSocket
 {
 public:
@@ -40,6 +51,7 @@ public:
 	void SetPointSit(int pSit);
 private:
 	char* _dataMessage;
+	//char _dataMessage[MESSAGE_BUF_LEN];
 	SOCKET _cSocket;
 	int _pSit;
 };
@@ -49,12 +61,12 @@ ClientSocket::ClientSocket(SOCKET socket)
 	_dataMessage = (char*)malloc(sizeof(char)*MESSAGE_BUF_LEN);
 	memset(_dataMessage, 0, MESSAGE_BUF_LEN);
 	_cSocket = socket;
-	int _pSit = 0;
+	_pSit = 0;
 }
 
 ClientSocket::~ClientSocket()
 {
-	free(_dataMessage);
+	//free(_dataMessage);
 }
 SOCKET ClientSocket::GetSocket()
 {
@@ -293,17 +305,15 @@ int EasyTcpServer::RecvData(ClientSocket* client)
 	int tempPSit = client->GetPointSit();
 	SOCKET tempSocket = client->GetSocket();
 	char* tempBuf = client->GetDataBuf();
+	memset(_dataRecv, 0, DATA_BUF_LEN);
 
 	int nLen = recv(tempSocket, (char*)_dataRecv, DATA_BUF_LEN, 0);
-	if (nLen < 0)
-	{
-		return nLen;
-	}
-	else if (nLen == 0)
+	if (nLen <= 0)
 	{
 		printf("ClientID: %d close...\n", client->GetSocket());
-		return nLen;
+		return -1;
 	}
+
 	memcpy(tempBuf + tempPSit, _dataRecv, nLen);
 	tempPSit += nLen;
 	if (tempPSit > DATA_BUF_LEN)
@@ -410,7 +420,7 @@ bool EasyTcpServer::OnRun()
 
 	SOCKET maxSocket = _sock;
 
-	timeval t = { 0,1 };
+	timeval t = { 0,0 };
 
 	//Determine if there is any data received
 	for (int n = 0; n < (int)g_clients.size(); n++)
@@ -442,7 +452,7 @@ bool EasyTcpServer::OnRun()
 
 		if (FD_ISSET(g_clients[n]->GetSocket(), &_fdRead))
 		{
-			if (-1 == RecvData(g_clients[n]) || 0 == RecvData(g_clients[n]))
+			if (-1 == RecvData(g_clients[n]))
 			{
 				auto iter = g_clients.begin() + n;
 				if (iter != g_clients.end())
