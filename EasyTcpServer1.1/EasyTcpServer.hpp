@@ -4,17 +4,20 @@
 
 
 #ifdef _WIN32
+
 /**********************************
 #ifndef FD_SETSIZE
 #define FD_SETSIZE      64
-#endif //FD_SETSIZE 
+#endif //FD_SETSIZE
 
 typedef struct fd_set {
-	u_int fd_count;              // how many are SET? 
-	SOCKET  fd_array[FD_SETSIZE];   // an array of SOCKETs 
+u_int fd_count;              // how many are SET?
+SOCKET  fd_array[FD_SETSIZE];   // an array of SOCKETs
 } fd_set;
 **********************************/
 #define FD_SETSIZE 1024
+
+
 #define WIN32_LEAN_AND_MEAN
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <WinSock2.h>
@@ -37,9 +40,11 @@ typedef struct fd_set {
 #include <vector>
 
 
+#include "CELLTimestamp.hpp"
 #include "MesProtocol.hpp"
-#define DATA_BUF_LEN 40960
-#define MESSAGE_BUF_LEN 10240
+#define DATA_BUF_LEN 409600
+#define MESSAGE_BUF_LEN 102400
+
 class ClientSocket
 {
 public:
@@ -51,9 +56,9 @@ public:
 	void SetPointSit(int pSit);
 private:
 	char* _dataMessage;
-	//char _dataMessage[MESSAGE_BUF_LEN];
 	SOCKET _cSocket;
 	int _pSit;
+
 };
 
 ClientSocket::ClientSocket(SOCKET socket)
@@ -62,11 +67,18 @@ ClientSocket::ClientSocket(SOCKET socket)
 	memset(_dataMessage, 0, MESSAGE_BUF_LEN);
 	_cSocket = socket;
 	_pSit = 0;
+	
 }
 
 ClientSocket::~ClientSocket()
 {
-	//free(_dataMessage);
+#ifdef _WIN32
+	closesocket(_cSocket);
+	//Clean Windows socket Envoronment
+#else
+	close(_cSocket);
+#endif
+	free(_dataMessage);
 }
 SOCKET ClientSocket::GetSocket()
 {
@@ -109,6 +121,8 @@ private:
 	SOCKET _cSock;
 	std::vector<ClientSocket*> g_clients;
 	char* _dataRecv;
+	CELLTimestamp _time;
+	int _recvCount;
 };
 
 EasyTcpServer::EasyTcpServer()
@@ -117,6 +131,7 @@ EasyTcpServer::EasyTcpServer()
 	_cSock = INVALID_SOCKET;
 	_dataRecv = (char*)malloc(sizeof(char) * DATA_BUF_LEN);
 	memset(_dataRecv, 0, DATA_BUF_LEN);
+	_recvCount = 0;
 }
 
 EasyTcpServer::~EasyTcpServer()
@@ -278,11 +293,12 @@ SOCKET EasyTcpServer::Accept()
 	}
 	else
 	{
-		printf("==SUCCESS==: accept Clinet!\n");
+		int temCount = g_clients.size() + 1;
+		printf("==SUCCESS==: accept %d Clinet!\n", temCount);
 		printf("==Clinet==: Socket: %d  IP : %s\n", (int)_cSock, inet_ntoa(_client.sin_addr));
-		NewUserJoin user;
-		user._socke = _cSock;
-		SendDataToAll(&user);
+		//NewUserJoin user;
+		//user._socke = _cSock;
+		//SendDataToAll(&user);
 		ClientSocket* temp = new ClientSocket(_cSock);
 		g_clients.push_back(temp);
 	}
@@ -351,28 +367,36 @@ int EasyTcpServer::RecvData(ClientSocket* client)
 *******************************************/
 void EasyTcpServer::OnNetMsg(SOCKET _cSock, DataHeader* _header)
 {
+	_recvCount++;
+	auto t = _time.GetElapsedSecond();
+	if (t >= 1.0)
+	{
+		printf("Time<%lf>, Socket<%d>, recvCount<%d>\n", t, _sock, _recvCount);
+		_recvCount = 0;
+		_time.Update();
+	}
 	switch (_header->_cmd)
 	{
 	case CMD_LOGIN:
 	{
-		Login *_login = (Login*)_header;
-		printf("recv: CMD_LOGIN, DataLength: %d\n", _login->_dataLength);
-		printf("UserName: %s, UserPassWord; %s\n", _login->_userName, _login->_userPassWord);
+		//Login *_login = (Login*)_header;
+		//printf("recv: CMD_LOGIN, DataLength: %d\n", _login->_dataLength);
+		//printf("UserName: %s, UserPassWord; %s\n", _login->_userName, _login->_userPassWord);
 
 		//receive Login struct, you can check data is right
-		LoginResult loginRe;
-		SendData(_cSock, &loginRe);
+		//LoginResult loginRe;
+		//SendData(_cSock, &loginRe);
 	}
 	break;
 	case CMD_LOGIN_OUT:
 	{
-		LoginOut* _loginOut = (LoginOut*)_header;
-		//receive Login struct, you can check data is right
-		printf("recv: CMD_LOGIN_OUT, DataLength: %d\n", _loginOut->_dataLength);
-		printf("UserName: %s \n", "admin");
+		//LoginOut* _loginOut = (LoginOut*)_header;
+		////receive Login struct, you can check data is right
+		//printf("recv: CMD_LOGIN_OUT, DataLength: %d\n", _loginOut->_dataLength);
+		//printf("UserName: %s \n", "admin");
 
-		LoginOutResult loginOutRe;
-		SendData(_cSock, &loginOutRe);
+		//LoginOutResult loginOutRe;
+		//SendData(_cSock, &loginOutRe);
 	}
 	break;
 	case CMD_ERROR:
@@ -458,7 +482,7 @@ bool EasyTcpServer::OnRun()
 				if (iter != g_clients.end())
 				{
 					delete g_clients[n];
-					g_clients.erase(iter);
+					g_clients.erase(iter);					
 				}
 			}
 		}
@@ -480,17 +504,7 @@ void EasyTcpServer::CloseSocket()
 {
 	if (_sock != INVALID_SOCKET)
 	{
-		// 6 Close Socket
-		for (size_t n = 0; n < g_clients.size(); n++)
-		{
-#ifdef _WIN32
-			closesocket(g_clients[n]->GetSocket());
-			delete g_clients[n];
-#else
-			close(g_clients[n]->GetSocket());
-			delete g_clients[n];
-#endif
-		}
+
 #ifdef _WIN32
 		closesocket(_sock);
 		//Clean Windows socket Envoronment
@@ -498,6 +512,14 @@ void EasyTcpServer::CloseSocket()
 #else
 		close(_sock);
 #endif
+	}
+	if (g_clients.size() != 0)
+	{
+		// 6 Close Socket
+		for (size_t n = 0; n < g_clients.size(); n++)
+		{
+			delete g_clients[n];
+		}
 	}
 }
 /*******************************************

@@ -271,7 +271,7 @@ bool EasyTcpClient::OnRun()
 
 		FD_SET(_sock, &_fdRead);
 
-		timeval t = { 0,1 };
+		timeval t = { 0,0 };
 
 		//if sock not add 1, select recv't message in the linux
 		int ret = select(_sock + 1, &_fdRead, 0, 0, &t);
