@@ -15,7 +15,7 @@ u_int fd_count;              // how many are SET?
 SOCKET  fd_array[FD_SETSIZE];   // an array of SOCKETs
 } fd_set;
 **********************************/
-#define FD_SETSIZE 1024
+#define FD_SETSIZE 4096
 
 
 #define WIN32_LEAN_AND_MEAN
